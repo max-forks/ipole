@@ -1,5 +1,11 @@
 # Based on https://github.com/github/gitignore/blob/main/C.gitignore
 
+# binary
+ipole
+
+# Output files
+output_ipole/
+
 # Prerequisites
 *.d
 
