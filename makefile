@@ -3,7 +3,7 @@
 #
 CC = h5cc -DH5_USE_16_API -lhdf5_hl
 CFLAGS =  -fopenmp -I/usr/include -I$(GSL_HOME)/include -O3 -w
-LDFLAGS = -L$(GSL_HOME)/lib -lm -lgsl -lgslcblas 
+LDFLAGS = -lm -lgsl -lgslcblas 
 
 SRCIPO = \
 main.c image.c geodesics.c radiation.c tetrads.c ipolarray.c geometry.c \
