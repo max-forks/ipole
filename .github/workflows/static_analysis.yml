@@ -3,10 +3,12 @@ name: Static analysis
 on:
   push:
     branches:
+      - main
       - master
       - devel
   pull_request:
     branches:
+      - master
       - master
       - devel
 
