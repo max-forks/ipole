@@ -9,7 +9,6 @@
 /**********************************************************/
 
 #include "decs.h"
-#include "defs.h"
 
 /* the following definitions are used only locally */
 #define DLOOP  for(k=0;k<NDIM;k++)for(l=0;l<NDIM;l++)

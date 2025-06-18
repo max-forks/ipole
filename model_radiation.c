@@ -9,7 +9,6 @@
 /**********************************************************/
 
 #include "decs.h"
-#include "defs.h"
 #include <gsl/gsl_sf_hyperg.h>
 #include <gsl/gsl_sf_gamma.h>
 

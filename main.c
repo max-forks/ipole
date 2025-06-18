@@ -1,5 +1,4 @@
 #include "decs.h"
-#include "defs.h"
 #include <omp.h>
 #include <time.h>
 

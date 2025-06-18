@@ -9,7 +9,6 @@
 /**********************************************************/
 
 #include "decs.h"
-#include "defs.h"
 
 
 /* the following definitions are used only locally */

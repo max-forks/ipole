@@ -1,3 +1,5 @@
+#include "decs.h"
+
 /* some coordinate parameters */
 double a;
 double R0 ;
