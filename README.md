@@ -1,3 +1,13 @@
+# Setup
+
+```
+module load gcc/15
+module load hdf5-serial/1.14.1
+module load gsl/2.7
+```
+
+# License
+
 
 
     Copyright 2017 Monika Moscibrodzka and Charles F. Gammie
