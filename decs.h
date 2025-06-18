@@ -238,7 +238,10 @@ void project_N(double X[NDIM],double Kcon[NDIM],
 	double *Stokes_I, double *Stokes_Q,double *Stokes_U,double *Stokes_V);
 
 
-
+void jar_calc_mixed_kappa(double X[NDIM], double Kcon[NDIM],
+                          double *jI, double *jQ, double *jU, double *jV,
+                          double *aI, double *aQ, double *aU, double *aV,
+                          double *rQ, double *rU, double *rV);
 
 
 
