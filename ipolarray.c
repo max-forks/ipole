@@ -4,7 +4,6 @@
 /***** along with standard evolution for I scalar *********/
 /**********************************************************/
 /**** written by Monika Moscibrodzka on 09 July 2014 ******/
-/************ @ Eindhoven Airport *************************/
 /************  last update: 9 May 2017   ******************/
 /************* co-author: C.F. Gammie *********************/
 /**********************************************************/
@@ -12,12 +11,17 @@
 #include "decs.h"
 #include "defs.h"
 
-
 /* the following definitions are used only locally */
-#define MNLOOP   for(m=0;m<NDIM;m++)for(n=0;n<NDIM;n++)
+#define DLOOP  for(k=0;k<NDIM;k++)for(l=0;l<NDIM;l++)
 
 /* transfer coefficients in tetrad frame */
 void jar_calc(double X[NDIM], double Kcon[NDIM],
+	      double *jI, double *jQ, double *jU, double *jV,
+	      double *aI, double *aQ, double *aU, double *aV,
+	      double *rQ, double *rU, double *rV);
+
+/* transfer coefficients in tetrad frame */
+void jar_calc_mixed_pl(double X[NDIM], double Kcon[NDIM],
 	      double *jI, double *jQ, double *jU, double *jV,
 	      double *aI, double *aQ, double *aU, double *aV,
 	      double *rQ, double *rU, double *rV);
@@ -44,13 +48,12 @@ geodesics integration = it is zero */
 void init_N(double X[NDIM], double Kcon[NDIM],
 	    double complex N_coord[NDIM][NDIM])
 {
-    int m, n;
 
-    MNLOOP N_coord[m][n] = 0.0 + I * 0.0;
+  for(int m=0;m<NDIM;m++)for(int n=0;n<NDIM;n++) N_coord[m][n] = 0.0 + I * 0.0;
+  
+  return;
 
-    return;
 }
-
 
 /*
 
@@ -69,18 +72,20 @@ void push_polar(double Xi[NDIM], double Xm[NDIM], double Xf[NDIM],
     get_connection(Xm, lconn);
     int i, j, k, l;
 
+    
     /* push N */
     for (i = 0; i < 4; i++)
 	for (j = 0; j < 4; j++)
 	    Nf[i][j] = Ni[i][j];
 
+
     for (i = 0; i < 4; i++)
 	for (j = 0; j < 4; j++)
 	    for (k = 0; k < 4; k++)
 		for (l = 0; l < 4; l++)
-		    Nf[i][j] += -(lconn[i][k][l] * Nm[k][j] * Km[l] +
-				  lconn[j][k][l] * Nm[i][k] * Km[l]
-			) * dl / (L_unit * HPL / (ME * CL * CL));
+		  Nf[i][j] += -(lconn[i][k][l] * Nm[k][j] * Km[l] +
+				lconn[j][k][l] * Nm[i][k] * Km[l]
+				) * dl / (L_unit * HPL / (ME * CL * CL));
 
     return;
 }
@@ -93,7 +98,8 @@ void push_polar(double Xi[NDIM], double Xm[NDIM], double Xf[NDIM],
 void evolve_N(double Xi[NDIM], double Kconi[NDIM],
 	      double Xhalf[NDIM], double Kconhalf[NDIM],
 	      double Xf[NDIM], double Kconf[NDIM],
-	      double dlam, double complex N_coord[NDIM][NDIM])
+	      double dlam, double complex N_coord[NDIM][NDIM],
+	      double *tauF)
 {
     int k;
     double gcov[NDIM][NDIM];
@@ -104,164 +110,300 @@ void evolve_N(double Xi[NDIM], double Kconi[NDIM],
     double B;
     double jI, jQ, jU, jV;
     double aI, aQ, aU, aV;
-    double rV, rU, rQ; 
+    double rV, rU, rQ;
+
+    double jIf, jQf, jUf, jVf;
+    double aIf, aQf, aUf, aVf;
+    double rVf, rUf, rQf; 
+
+    double jIi, jQi, jUi, jVi;
+    double aIi, aQi, aUi, aVi;
+    double rVi, rUi, rQi; 
+
+    
     double SI, SQ, SU, SV;
     double SI0, SQ0, SU0, SV0;
-
+    double xc,yc,zc;
     int radiating_region(double X[4]);
 
     /* parallel transport N by a half, and then full, step */
     push_polar(Xi, Xi, Xhalf, Kconi, Kconi, Kconhalf, N_coord, N_coord, Nh, 0.5 * dlam);
     push_polar(Xi, Xhalf, Xf, Kconi, Kconhalf, Kconf, N_coord, Nh, N_coord, dlam);
 
+    
     /* absorption/emission/rotation step.  only complete if radiating_region condition is satisfied */
     if ( radiating_region(Xf) ) {
 
 	/* evaluate transport coefficients */
 	gcov_func(Xf, gcov);
-	jar_calc(Xf, Kconf, &jI, &jQ, &jU, &jV,
-		 &aI, &aQ, &aU, &aV, &rQ, &rU, &rV);
-
+	
+	if(THERMAL) jar_calc(Xf, Kconf, &jI, &jQ, &jU, &jV,&aI, &aQ, &aU, &aV, &rQ, &rU, &rV);	    
+	if(POWERL) jar_calc_mixed_pl(Xf, Kconf, &jI, &jQ, &jU, &jV, &aI, &aQ, &aU, &aV, &rQ, &rU, &rV);
+	if(KAPPAL) jar_calc_mixed_kappa(Xf, Kconf, &jI, &jQ, &jU, &jV, &aI, &aQ, &aU, &aV, &rQ, &rU, &rV);
+	
+	*tauF += dlam*fabs(rV);
+	
 	/* make plasma tetrad */
 	get_model_ucon(Xf, Ucon);
 	B = get_model_b(Xf);	/* field in G */
+	
 	if (B > 0.) {
-	    get_model_bcon(Xf, Bcon);
-	}
-	else {
+	  get_model_bcon(Xf, Bcon);
+	} else {
 	    Bcon[0] = 0.;
 	    for (k = 1; k < NDIM; k++)
 		Bcon[k] = 1.;
 	}
+	
+	get_model_bcon(Xf, Bcon);
 	make_plasma_tetrad(Ucon, Kconf, Bcon, gcov, Econ, Ecov);
 
 	/* convert N to Stokes */
 	complex_coord_to_tetrad_rank2(N_coord, Ecov, N_tetrad);
 	tensor_to_stokes(N_tetrad, &SI0, &SQ0, &SU0, &SV0);
 
-	int k,l;
-	double M1[NDIM][NDIM];
-	double M2[NDIM][NDIM];
-	double M3[NDIM][NDIM];
-	double M4[NDIM][NDIM];
-	double O[NDIM][NDIM];
-	double P[NDIM][NDIM];
+	
+	if(INT_SPLIT){
+	    //the 3 steps scheme for stokes.
 
-	double alpha2=aQ*aQ + aU*aU + aV*aV;
-	double rho2  =rQ*rQ + rU*rU + rV*rV;
-	double alphadrho = aQ*rQ + aU*rU + aV*rV;
-	double sig=copysign(1.,alphadrho);
-	double T=2.*sqrt(pow(alpha2 - rho2,2)/4.+ alphadrho*alphadrho ) ;
-	double ith=1./(T+SMALL); //so that if a=r=0  M234->0, not NaN
-	double L1=sqrt(T*0.5+(alpha2-rho2)*0.5)+SMALL; //so that if a=0 alone fac1 != 1/0
-	double L2=sqrt(T*0.5-(alpha2-rho2)*0.5)+SMALL; //so that if a=r=0 fac2 != 0   
+	    /* step 1*/
+            /* apply the Faraday rotation solution for a half step */
+	    double x = dlam * 0.5;
+	
+	    //additional Stokes parameters
+	    double SI1, SQ1, SU1, SV1;
+	    double SI2, SQ2, SU2, SV2;
+	
+	    double rdS = rQ * SQ0 + rU * SU0 + rV * SV0;
+	    double rho2 = rQ * rQ + rU * rU + rV * rV;
+	    double rho = sqrt(rho2);
+	    double c, s, sh;
+	    c = cos(rho * x);
+	    s = sin(rho * x);
+	    sh = sin(0.5 * rho * x);
+	    if (rho2 > 0) {
+		SI1 = SI0;
+		SQ1 = SQ0 * c + 2 * rQ * rdS / rho2 * sh * sh + (rU * SV0 - rV * SU0) / rho * s;
+		SU1 = SU0 * c + 2 * rU * rdS / rho2 * sh * sh + (rV * SQ0 - rQ * SV0) / rho * s;
+		SV1 = SV0 * c + 2 * rV * rdS / rho2 * sh * sh + (rQ * SU0 - rU * SQ0) / rho * s;
+	    } else {
+		SI1 = SI0;
+		SQ1 = SQ0;
+		SU1 = SU0;
+		SV1 = SV0;
+	    }
+	    /* done rotation solution half step */
 
-	for(k=0;k<NDIM;k++)for(l=0;l<NDIM;l++) M1[k][l]=0.0;
-	M1[0][0]=1.0;
-	M1[1][1]=1.0;
-	M1[2][2]=1.0;
-	M1[3][3]=1.0;
+	    /* step 2*/
+	    /* apply full absorption/emission step */
+	    x = dlam;
+	    double aI2 = aI * aI;
+	    double aP2 = aQ * aQ + aU * aU + aV * aV;
+	    double aP = sqrt(aP2);
+	    double ads0 = aQ * SQ1 + aU * SU1 + aV * SV1;
+	    double adj = aQ * jQ + aU * jU + aV * jV;
 
-	M2[0][0]=0.0;
-	M2[0][1]=ith*(L2*aQ - sig*L1*rQ);
-	M2[0][2]=ith*(L2*aU - sig*L1*rU);
-	M2[0][3]=ith*(L2*aV - sig*L1*rV);
+	
+	    if (aP > SMALL) { /* full analytic solution has trouble if polarized absorptivity is small */
+		double expaIx = exp(-aI * x);
+		double sinhaPx = sinh(aP * x);
+		double coshaPx = cosh(aP * x);
+	    
+		SI2 = (SI1 * coshaPx * expaIx
+		       - (ads0 / aP) * sinhaPx * expaIx
+		       + adj / (aI2 - aP2) * (-1 + (aI * sinhaPx + aP * coshaPx) / aP * expaIx)
+		       + aI * jI / (aI2 - aP2) * (1 - (aI * coshaPx + aP * sinhaPx) / aI * expaIx));
+	    
+		SQ2 = (SQ1 * expaIx
+		       + ads0 * aQ / aP2 * (-1 + coshaPx) * expaIx
+		       - aQ / aP * SI1 * sinhaPx * expaIx
+		       + jQ * (1 - expaIx) / aI
+		       + adj * aQ / (aI * (aI2 - aP2)) * (1 - (1 - aI2 / aP2) * expaIx
+							  - aI / aP2 * (aI * coshaPx + aP * sinhaPx) * expaIx)
+		       + jI * aQ / (aP * (aI2 - aP2)) * (-aP + (aP * coshaPx + aI * sinhaPx) * expaIx));
+		
+		SU2 = (SU1 * expaIx
+		       + ads0 * aU / aP2 * (-1 + coshaPx) * expaIx
+		       - aU / aP * SI1 * sinhaPx * expaIx
+		       + jU * (1 - expaIx) / aI
+		       + adj * aU / (aI * (aI2 - aP2)) *
+		       (1 - (1 - aI2 / aP2) * expaIx -
+			aI / aP2 * (aI * coshaPx +
+				aP * sinhaPx) * expaIx)
+		       + jI * aU / (aP * (aI2 - aP2)) *
+		       (-aP + (aP * coshaPx + aI * sinhaPx) * expaIx));
+	    
+		SV2 = (SV1 * expaIx
+		       + ads0 * aV / aP2 * (-1 + coshaPx) * expaIx
+		       - aV / aP * SI1 * sinhaPx * expaIx
+		       + jV * (1 - expaIx) / aI
+		       + adj * aV / (aI * (aI2 - aP2)) * (1 -
+							  (1 - aI2 / aP2) * expaIx -
+							  aI / aP2 * (aI * coshaPx +
+								      aP * sinhaPx) * expaIx)
+		       + jI * aV / (aP * (aI2 - aP2)) *
+		       (-aP + (aP * coshaPx + aI * sinhaPx) * expaIx));
+	    
+	    } else { /* this should really be a series expansion in aP */
+		SI2 = SI1 + x * jI;
+		SQ2 = SQ1 + x * jQ;
+		SU2 = SU1 + x * jU;
+		SV2 = SV1 + x * jV;
+	    }
+	    /* done absorption/emission full step */
 
-	M2[1][0]=ith*(L2*aQ - sig*L1*rQ);
-	M2[1][1]=0.0;
-	M2[1][2]=ith*(sig*L1*aV + L2*rV);
-	M2[1][3]=ith*(-sig*L1*aU - L2*rU);
+	    /* step 3*/
+	    /* apply second rotation half-step */
+	    x = dlam * 0.5;
+	    rdS = rQ * SQ2 + rU * SU2 + rV * SV2;
+	    rho2 = rQ * rQ + rU * rU + rV * rV;
+	    rho = sqrt(rho2);
+	    c = cos(rho * x);
+	    s = sin(rho * x);
+	    sh = sin(0.5 * rho * x);
+	    if (rho2 > 0) {
+		SI = SI2;
+		SQ = SQ2 * c + 2 * rQ * rdS / rho2 * sh * sh + (rU * SV2 - rV * SU2) / rho * s;
+		SU = SU2 * c + 2 * rU * rdS / rho2 * sh * sh + (rV * SQ2 - rQ * SV2) / rho * s;
+		SV = SV2 * c + 2 * rV * rdS / rho2 * sh * sh + (rQ * SU2 - rU * SQ2) / rho * s;
+	    } else {
+		SI = SI2;
+		SQ = SQ2;
+		SU = SU2;
+		SV = SV2;
+	    }
+	    /* done second rotation half-step */
+	}
 
-	M2[2][0]=ith*(L2*aU - sig*L1*rU);
-	M2[2][1]=ith*(-sig*L1*aV - L2*rV);
-	M2[2][2]=0.0;
-	M2[2][3]=ith*(sig*L1*aQ + L2*rQ);
+	/* single step solution */
+	if(INT_FULL){
+	
+	    int k,l;
+	    double M1[NDIM][NDIM];
+	    double M2[NDIM][NDIM];
+	    double M3[NDIM][NDIM];
+	    double M4[NDIM][NDIM];
+	    double O[NDIM][NDIM];
+	    double P[NDIM][NDIM];
 
-	M2[3][0]=ith*(L2*aV - sig*L1*rV);
-	M2[3][1]=ith*(sig*L1*aU + L2*rU);
-	M2[3][2]=ith*(-sig*L1*aQ - L2*rQ);
-	M2[3][3]=0.0;
+	    double alpha2=aQ*aQ + aU*aU + aV*aV;
+	    double rho2  =rQ*rQ + rU*rU + rV*rV;
+	    double alphadrho = aQ*rQ + aU*rU + aV*rV;
+	    double sig=copysign(1.,alphadrho);
+	    double T=2.*sqrt(pow(alpha2 - rho2,2)/4.+ alphadrho*alphadrho ) ;
+	    double ith=1./(T+SMALL); //so that if a=r=0  M234->0, not NaN
+	    double L1=sqrt(T*0.5+(alpha2-rho2)*0.5)+SMALL; //so that if a=0 alone fac1 != 1/0
+	    double L2=sqrt(T*0.5-(alpha2-rho2)*0.5)+SMALL; //so that if a=r=0 fac2 != 0   
 
-	M3[0][0]=0.0;
-	M3[0][1]=ith*(L1*aQ + sig*L2*rQ);
-	M3[0][2]=ith*(L1*aU + sig*L2*rU);
-	M3[0][3]=ith*(L1*aV + sig*L2*rV);
+	
+	    for(k=0;k<NDIM;k++)for(l=0;l<NDIM;l++) M1[k][l]=0.0;
+	    M1[0][0]=1.0;
+	    M1[1][1]=1.0;
+	    M1[2][2]=1.0;
+	    M1[3][3]=1.0;
 
-	M3[1][0]=ith*(L1*aQ + sig*L2*rQ);
-	M3[1][1]=0.0;
-	M3[1][2]=ith*(-sig*L2*aV + L1*rV);
-	M3[1][3]=ith*(sig*L2*aU - L1*rU);
+	    M2[0][0]=0.0;
+	    M2[0][1]=ith*(L2*aQ - sig*L1*rQ);
+	    M2[0][2]=ith*(L2*aU - sig*L1*rU);
+	    M2[0][3]=ith*(L2*aV - sig*L1*rV);
 
-	M3[2][0]=ith*(L1*aU + sig*L2*rU);
-	M3[2][1]=ith*(sig*L2*aV - L1*rV);
-	M3[2][2]=0.0;
-	M3[2][3]=ith*(-sig*L2*aQ + L1*rQ);
+	    M2[1][0]=ith*(L2*aQ - sig*L1*rQ);
+	    M2[1][1]=0.0;
+	    M2[1][2]=ith*(sig*L1*aV + L2*rV);
+	    M2[1][3]=ith*(-sig*L1*aU - L2*rU);
 
-	M3[3][0]=ith*(L1*aV + sig*L2*rV);
-	M3[3][1]=ith*(-sig*L2*aU + L1*rU);
-	M3[3][2]=ith*(sig*L2*aQ - L1*rQ);
-	M3[3][3]=0.0;
+	    M2[2][0]=ith*(L2*aU - sig*L1*rU);
+	    M2[2][1]=ith*(-sig*L1*aV - L2*rV);
+	    M2[2][2]=0.0;
+	    M2[2][3]=ith*(sig*L1*aQ + L2*rQ);
+
+	    M2[3][0]=ith*(L2*aV - sig*L1*rV);
+	    M2[3][1]=ith*(sig*L1*aU + L2*rU);
+	    M2[3][2]=ith*(-sig*L1*aQ - L2*rQ);
+	    M2[3][3]=0.0;
+
+	    M3[0][0]=0.0;
+	    M3[0][1]=ith*(L1*aQ + sig*L2*rQ);
+	    M3[0][2]=ith*(L1*aU + sig*L2*rU);
+	    M3[0][3]=ith*(L1*aV + sig*L2*rV);
+
+	    M3[1][0]=ith*(L1*aQ + sig*L2*rQ);
+	    M3[1][1]=0.0;
+	    M3[1][2]=ith*(-sig*L2*aV + L1*rV);
+	    M3[1][3]=ith*(sig*L2*aU - L1*rU);
+
+	    M3[2][0]=ith*(L1*aU + sig*L2*rU);
+	    M3[2][1]=ith*(sig*L2*aV - L1*rV);
+	    M3[2][2]=0.0;
+	    M3[2][3]=ith*(-sig*L2*aQ + L1*rQ);
+
+	    M3[3][0]=ith*(L1*aV + sig*L2*rV);
+	    M3[3][1]=ith*(-sig*L2*aU + L1*rU);
+	    M3[3][2]=ith*(sig*L2*aQ - L1*rQ);
+	    M3[3][3]=0.0;
 
 
-	M4[0][0]=2.*ith*(alpha2+rho2)/2.;
-	M4[0][1]=2.*ith*(aV*rU - aU*rV);
-	M4[0][2]=2.*ith*(aQ*rV - aV*rQ);
-	M4[0][3]=2.*ith*(aU*rQ - aQ*rU);
+	    M4[0][0]=2.*ith*(alpha2+rho2)/2.;
+	    M4[0][1]=2.*ith*(aV*rU - aU*rV);
+	    M4[0][2]=2.*ith*(aQ*rV - aV*rQ);
+	    M4[0][3]=2.*ith*(aU*rQ - aQ*rU);
+	    
+	    M4[1][0]=2.*ith*(aU*rV - aV*rU);
+	    M4[1][1]=2.*ith*(aQ*aQ + rQ*rQ - (alpha2+rho2)/2.);
+	    M4[1][2]=2.*ith*(aQ*aU + rQ*rU);
+	    M4[1][3]=2.*ith*(aV*aQ + rV*rQ);
 
-	M4[1][0]=2.*ith*(aU*rV - aV*rU);
-	M4[1][1]=2.*ith*(aQ*aQ + rQ*rQ - (alpha2+rho2)/2.);
-	M4[1][2]=2.*ith*(aQ*aU + rQ*rU);
-	M4[1][3]=2.*ith*(aV*aQ + rV*rQ);
+	    M4[2][0]=2.*ith*(aV*rQ - aQ*rV);
+	    M4[2][1]=2.*ith*(aQ*aU + rQ*rU);
+	    M4[2][2]=2.*ith*(aU*aU + rU*rU - (alpha2+rho2)/2.);
+	    M4[2][3]=2.*ith*(aU*aV + rU*rV);
 
-	M4[2][0]=2.*ith*(aV*rQ - aQ*rV);
-	M4[2][1]=2.*ith*(aQ*aU + rQ*rU);
-	M4[2][2]=2.*ith*(aU*aU + rU*rU - (alpha2+rho2)/2.);
-	M4[2][3]=2.*ith*(aU*aV + rU*rV);
+	    M4[3][0]=2.*ith*(aQ*rU - aU*rQ);
+	    M4[3][1]=2.*ith*(aV*aQ + rV*rQ);
+	    M4[3][2]=2.*ith*(aU*aV + rU*rV);
+	    M4[3][3]=2.*ith*(aV*aV + rV*rV - (alpha2+rho2)/2.);
 
-	M4[3][0]=2.*ith*(aQ*rU - aU*rQ);
-	M4[3][1]=2.*ith*(aV*aQ + rV*rQ);
-	M4[3][2]=2.*ith*(aU*aV + rU*rV);
-	M4[3][3]=2.*ith*(aV*aV + rV*rV - (alpha2+rho2)/2.);
+	    double fac1=1./(aI*aI - L1*L1);
+	    double fac2=1./(aI*aI + L2*L2);
+	    double l1dlam=L1*dlam;
+	    double l2dlam=L2*dlam;
+	    double EaIdlam=exp(-aI*dlam);
+	    double coshl1dlam=cosh(l1dlam);
+	    double sinhl1dlam=sinh(l1dlam);
+	    double cosl2dlam=cos(l2dlam);
+	    double sinl2dlam=sin(l2dlam);
+	    
+	    for(k=0;k<4;k++)for(l=0;l<4;l++){
 
-	double fac1=1./(aI*aI - L1*L1);
-	double fac2=1./(aI*aI + L2*L2);
-	double l1dlam=L1*dlam;
-	double l2dlam=L2*dlam;
-	double EaIdlam=exp(-aI*dlam);
-	double coshl1dlam=cosh(l1dlam);
-	double sinhl1dlam=sinh(l1dlam);
-	double cosl2dlam=cos(l2dlam);
-	double sinl2dlam=sin(l2dlam);
+		    O[k][l] = EaIdlam*( 0.5*(coshl1dlam+cosl2dlam)*M1[k][l]
+					- sinl2dlam*M2[k][l]
+					- sinhl1dlam*M3[k][l]
+					+ 0.5*(coshl1dlam-cosl2dlam)*M4[k][l]
+			);
+	    
+		    P[k][l] = (-L1*fac1*M3[k][l] + 0.5*aI*fac1*(M1[k][l] + M4[k][l])) +
+			(-L2*fac2*M2[k][l] + 0.5*aI*fac2*(M1[k][l] - M4[k][l])) -
+			EaIdlam*(
+			    ( -L1*fac1*M3[k][l] + 0.5*aI*fac1*(M1[k][l] + M4[k][l]) )*coshl1dlam +
+			    ( -L2*fac2*M2[k][l] + 0.5*aI*fac2*(M1[k][l] - M4[k][l]) )*cosl2dlam  +
+			    ( -aI*fac2*M2[k][l] - 0.5*L2*fac2*(M1[k][l] - M4[k][l]) )*sinl2dlam  -
+			    (  aI*fac1*M3[k][l] - 0.5*L1*fac1*(M1[k][l] + M4[k][l]) )*sinhl1dlam
+			    );
 
-	for(k=0;k<4;k++)for(l=0;l<4;l++){
+		}
 
-	    O[k][l] = EaIdlam*( 0.5*(coshl1dlam+cosl2dlam)*M1[k][l]
-				- sinl2dlam*M2[k][l]
-				- sinhl1dlam*M3[k][l]
-				+ 0.5*(coshl1dlam-cosl2dlam)*M4[k][l]
-				);
+	    SI = P[0][0]*jI + P[0][1]*jQ + P[0][2]*jU + P[0][3]*jV + O[0][0]*SI0 + O[0][1]*SQ0 + O[0][2]*SU0 + O[0][3]*SV0;
+	    SQ = P[1][0]*jI + P[1][1]*jQ + P[1][2]*jU + P[1][3]*jV + O[1][0]*SI0 + O[1][1]*SQ0 + O[1][2]*SU0 + O[1][3]*SV0;
+	    SU = P[2][0]*jI + P[2][1]*jQ + P[2][2]*jU + P[2][3]*jV + O[2][0]*SI0 + O[2][1]*SQ0 + O[2][2]*SU0 + O[2][3]*SV0;
+	    SV = P[3][0]*jI + P[3][1]*jQ + P[3][2]*jU + P[3][3]*jV + O[3][0]*SI0 + O[3][1]*SQ0 + O[3][2]*SU0 + O[3][3]*SV0;
+	}
 
-	    P[k][l] = (-L1*fac1*M3[k][l] + 0.5*aI*fac1*(M1[k][l] + M4[k][l])) +
-	              (-L2*fac2*M2[k][l] + 0.5*aI*fac2*(M1[k][l] - M4[k][l])) -
-	      EaIdlam*(
-		       ( -L1*fac1*M3[k][l] + 0.5*aI*fac1*(M1[k][l] + M4[k][l]) )*coshl1dlam +
-		       ( -L2*fac2*M2[k][l] + 0.5*aI*fac2*(M1[k][l] - M4[k][l]) )*cosl2dlam  +
-		       ( -aI*fac2*M2[k][l] - 0.5*L2*fac2*(M1[k][l] - M4[k][l]) )*sinl2dlam  -
-		       (  aI*fac1*M3[k][l] - 0.5*L1*fac1*(M1[k][l] + M4[k][l]) )*sinhl1dlam
-		      );
-
-	  }
-
-  	 SI = P[0][0]*jI + P[0][1]*jQ + P[0][2]*jU + P[0][3]*jV + O[0][0]*SI0 + O[0][1]*SQ0 + O[0][2]*SU0 + O[0][3]*SV0;
-	 SQ = P[1][0]*jI + P[1][1]*jQ + P[1][2]*jU + P[1][3]*jV + O[1][0]*SI0 + O[1][1]*SQ0 + O[1][2]*SU0 + O[1][3]*SV0;
-	 SU = P[2][0]*jI + P[2][1]*jQ + P[2][2]*jU + P[2][3]*jV + O[2][0]*SI0 + O[2][1]*SQ0 + O[2][2]*SU0 + O[2][3]*SV0;
-	 SV = P[3][0]*jI + P[3][1]*jQ + P[3][2]*jU + P[3][3]*jV + O[3][0]*SI0 + O[3][1]*SQ0 + O[3][2]*SU0 + O[3][3]*SV0;
- 
 	/* re-pack the Stokes parameters into N */
 	stokes_to_tensor(SI, SQ, SU, SV, N_tetrad);
 	complex_tetrad_to_coord_rank2(N_tetrad, Econ, N_coord);
 
     }
+
 
     /* SOURCE STEP DONE */
 
@@ -275,13 +417,14 @@ void project_N(double X[NDIM], double Kcon[NDIM],
 {
     double complex N_tetrad[NDIM][NDIM];
     double Econ[NDIM][NDIM], Ecov[NDIM][NDIM];
-
+    
+    
     make_camera_tetrad(X, Econ, Ecov);
 
     complex_coord_to_tetrad_rank2(N_coord, Ecov, N_tetrad);
 
     tensor_to_stokes(N_tetrad, Stokes_I, Stokes_Q, Stokes_U, Stokes_V);
-
+    
     return;
 
 }
@@ -486,4 +629,4 @@ void complex_tetrad_to_coord_rank2(double complex T_tetrad[NDIM][NDIM],
     return;
 }
 
-#undef MNLOOP
+
