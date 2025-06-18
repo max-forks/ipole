@@ -1,0 +1,30 @@
+name: Testing
+
+on:
+  push:
+    branches:
+      - master
+      - devel
+  pull_request:
+    branches:
+      - master
+      - devel
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          echo "Installing dependencies..."
+
+      - name: Compile
+        run: |
+          echo "Compiling..."
