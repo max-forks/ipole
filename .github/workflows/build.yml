@@ -42,3 +42,8 @@ jobs:
         run: |
           echo "Compiling..."
           make
+
+      - name: Standard run
+        run: |
+          echo "Running standard parameters..."
+          sh run.sh
